@@ -1,0 +1,83 @@
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Virtual Environment
+venv/
+.venv/
+env/
+ENV/
+myvenv/
+
+# Environment Variables
+.env
+.env.*
+!.env.example
+
+# Django
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+media/
+staticfiles/
+static_root/
+
+# Django migrations
+# Keep migrations tracked in Git
+# */migrations/__pycache__/
+
+# Cache
+.cache/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# Uploads and temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+
+# IDEs and Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# OS files
+Thumbs.db
+Desktop.ini
+
+# Testing
+.tox/
+.nox/
+
+# Documentation builds
+docs/_build/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Docker
+.docker/
+
+# Node.js (if Django project includes frontend)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
