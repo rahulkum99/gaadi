@@ -17,17 +17,17 @@ urlpatterns = [
     path("auth/refresh/", EmailTokenRefreshView.as_view(), name="auth-refresh"),
     path("auth/me/", MeView.as_view(), name="auth-me"),
     path("users/", UserListCreateView.as_view(), name="user-list"),
-    path("users/<int:pk>/", UserDetailView.as_view(), name="user-detail"),
+    path("users/<uuid:pk>/", UserDetailView.as_view(), name="user-detail"),
     path(
-        "users/<int:user_id>/assignments/",
+        "users/<uuid:user_id>/assignments/",
         UserAssignmentListCreateView.as_view(),
         name="user-assignment-list",
     ),
     path(
-        "users/<int:user_id>/assignments/<int:pk>/",
+        "users/<uuid:user_id>/assignments/<uuid:pk>/",
         UserAssignmentDestroyView.as_view(),
         name="user-assignment-detail",
     ),
     path("roles/", RoleListView.as_view(), name="role-list"),
-    path("roles/<int:pk>/", RoleDetailView.as_view(), name="role-detail"),
+    path("roles/<uuid:pk>/", RoleDetailView.as_view(), name="role-detail"),
 ]

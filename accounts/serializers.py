@@ -41,8 +41,8 @@ class RoleSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Role
-        fields = ("id", "code", "name", "is_system", "permissions")
-        read_only_fields = ("id", "code", "name", "is_system")
+        fields = ("id", "code", "name", "is_system", "permissions", "created_at", "updated_at")
+        read_only_fields = ("id", "code", "name", "is_system", "created_at", "updated_at")
 
 
 class RoleUpdateSerializer(serializers.Serializer):
@@ -71,8 +71,8 @@ class RoleUpdateSerializer(serializers.Serializer):
 class UserAssignmentSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserAssignment
-        fields = ("id", "scope_type", "object_id")
-        read_only_fields = ("id",)
+        fields = ("id", "scope_type", "object_id", "created_at", "updated_at")
+        read_only_fields = ("id", "created_at", "updated_at")
 
     def validate_scope_type(self, value):
         if value not in ASSIGNMENT_SCOPE_TYPES:
@@ -102,6 +102,8 @@ class UserSerializer(serializers.ModelSerializer):
             "role_name",
             "is_active",
             "date_joined",
+            "created_at",
+            "updated_at",
             "permissions",
             "assignments",
         )

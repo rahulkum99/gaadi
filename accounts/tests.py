@@ -1,4 +1,5 @@
 from copy import deepcopy
+from uuid import UUID
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -26,6 +27,10 @@ class AccountsRBACTests(APITestCase):
         self.finance_role = Role.objects.get(code=RoleCode.FINANCE)
         self.gov_role = Role.objects.get(code=RoleCode.GOVERNMENT_VIEWER)
         self.head_role = Role.objects.get(code=RoleCode.CONSTITUENCY_HEAD)
+        self.assertIsInstance(self.admin.pk, UUID)
+        self.assertIsInstance(self.finance_role.pk, UUID)
+        self.assertTrue(self.admin.created_at)
+        self.assertTrue(self.admin.updated_at)
 
     def authenticate(self, user, password):
         response = self.client.post(

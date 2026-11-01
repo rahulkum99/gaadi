@@ -10,15 +10,16 @@ from accounts.constants import (
     SCOPES,
 )
 from accounts.managers import UserManager
+from base.models import TimeStampedUUIDModel
 
 
-class Role(models.Model):
+class Role(TimeStampedUUIDModel):
     code = models.CharField(max_length=64, unique=True)
     name = models.CharField(max_length=128)
     is_system = models.BooleanField(default=True)
 
     class Meta:
-        ordering = ("id",)
+        ordering = ("created_at",)
 
     def __str__(self):
         return self.name
@@ -28,7 +29,7 @@ class Role(models.Model):
         return self.code == RoleCode.SUPER_ADMIN
 
 
-class RolePermission(models.Model):
+class RolePermission(TimeStampedUUIDModel):
     role = models.ForeignKey(
         Role,
         on_delete=models.CASCADE,
@@ -48,7 +49,7 @@ class RolePermission(models.Model):
         return f"{self.role.code}:{self.module}={self.level}/{self.scope}"
 
 
-class User(AbstractBaseUser, PermissionsMixin):
+class User(TimeStampedUUIDModel, AbstractBaseUser, PermissionsMixin):
     email = models.EmailField(unique=True)
     full_name = models.CharField(max_length=255, blank=True)
     role = models.ForeignKey(
@@ -85,7 +86,7 @@ class User(AbstractBaseUser, PermissionsMixin):
         super().save(*args, **kwargs)
 
 
-class UserAssignment(models.Model):
+class UserAssignment(TimeStampedUUIDModel):
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,

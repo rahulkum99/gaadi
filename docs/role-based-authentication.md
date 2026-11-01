@@ -2,6 +2,18 @@
 
 Gaadi uses email/password JWT login. Super Admin creates every other user and can change what each role is allowed to do. Users inherit permissions from their role. There are no per-user permission overrides.
 
+All records use a UUID primary key plus `created_at` and `updated_at` from [`base/models.py`](../base/models.py). Import that model in new apps:
+
+```python
+from django.db import models
+
+from base.models import TimeStampedUUIDModel
+
+
+class Vehicle(TimeStampedUUIDModel):
+    name = models.CharField(max_length=128)
+```
+
 Base URL: `/api/v1/`
 
 The API uses URL path versioning. Only `v1` is accepted. Unversioned paths such as `/api/auth/login/` and unknown versions such as `/api/v2/` return 404.
@@ -12,13 +24,14 @@ Send authenticated requests as:
 Authorization: Bearer <access_token>
 ```
 
-Access tokens last 1 hour. Refresh tokens last 7 days.
+Access tokens last 1 hour and refresh tokens last 7 days by default. Override with `ACCESS_TOKEN_HOURS` and `REFRESH_TOKEN_DAYS` in `.env`.
 
 ## 1. Create the first Super Admin
 
-Roles and the default permission matrix are seeded automatically on migrate.
+Copy [`.env.example`](../.env.example) to `.env`, then migrate. Roles and the default permission matrix are seeded automatically.
 
 ```bash
+copy .env.example .env
 python manage.py migrate
 python manage.py createsuperuser
 ```
@@ -45,12 +58,15 @@ Response includes `access`, `refresh`, and the current user with role, permissio
   "access": "eyJ...",
   "refresh": "eyJ...",
   "user": {
-    "id": 1,
+    "id": "4c29384c-b039-44c3-8207-ac293eda48db",
     "email": "admin@example.com",
     "full_name": "Super Admin",
     "role": "super_admin",
     "role_name": "Super Admin",
     "is_active": true,
+    "date_joined": "2026-11-01T14:00:00Z",
+    "created_at": "2026-11-01T14:00:00Z",
+    "updated_at": "2026-11-01T14:00:00Z",
     "permissions": [
       { "module": "dashboard", "level": "full", "scope": "all" }
     ],
@@ -144,19 +160,19 @@ Other user endpoints:
 | Method | Path | Notes |
 |---|---|---|
 | `GET` | `/api/v1/users/` | List users |
-| `GET` | `/api/v1/users/{id}/` | User detail |
-| `PATCH` | `/api/v1/users/{id}/` | Update `email`, `full_name`, `role`, `is_active`, optional `password` |
-| `DELETE` | `/api/v1/users/{id}/` | Deactivates the user. The row is not deleted. |
-| `GET` / `POST` | `/api/v1/users/{id}/assignments/` | List or add assignments |
-| `DELETE` | `/api/v1/users/{id}/assignments/{assignment_id}/` | Remove one assignment |
+| `GET` | `/api/v1/users/{uuid}/` | User detail |
+| `PATCH` | `/api/v1/users/{uuid}/` | Update `email`, `full_name`, `role`, `is_active`, optional `password` |
+| `DELETE` | `/api/v1/users/{uuid}/` | Deactivates the user. The row is not deleted. |
+| `GET` / `POST` | `/api/v1/users/{uuid}/assignments/` | List or add assignments |
+| `DELETE` | `/api/v1/users/{uuid}/assignments/{assignment_uuid}/` | Remove one assignment |
 
 The last remaining Super Admin cannot be deactivated or changed to another role.
 
 ## 5. Super Admin: change role permissions
 
-`GET /api/v1/roles/` returns every role and its current matrix.
+`GET /api/v1/roles/` and `GET /api/v1/roles/{uuid}/` return roles with their current matrix, including UUID `id`, `created_at`, and `updated_at`.
 
-`PATCH /api/v1/roles/{id}/` updates only the modules you send. Other modules stay as they are.
+`PATCH /api/v1/roles/{uuid}/` updates only the modules you send. Other modules stay as they are.
 
 ```json
 {
@@ -231,6 +247,8 @@ Rate limits:
 | `login` | 5 / minute per IP | `/api/v1/auth/login/` and `/api/v1/auth/refresh/` |
 | `anon` | 30 / minute per IP | Unauthenticated API requests |
 | `user` | 120 / minute per user | Authenticated API requests |
+
+Override with `THROTTLE_LOGIN`, `THROTTLE_ANON`, and `THROTTLE_USER` in `.env`.
 
 A throttled request returns `429 Too Many Requests`. Wait and retry, or refresh the access token instead of logging in again.
 
