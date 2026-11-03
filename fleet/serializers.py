@@ -1,0 +1,240 @@
+from rest_framework import serializers
+
+from fleet.constants import (
+    APPROVAL_STATUSES,
+    DISTRICTS,
+    DOCUMENT_TYPES,
+    DUTY_STATUSES,
+    ApprovalStatus,
+    DutyStatus,
+    constituency_code,
+    format_vehicle_code,
+)
+from fleet.models import Constituency, Driver, Vehicle, VehicleTelemetry
+from fleet.services import ensure_vehicle_documents, next_constituency_number, next_vehicle_serial
+
+
+class ConstituencyWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Constituency
+        fields = ("name", "district", "number", "lat", "lng", "image")
+        extra_kwargs = {
+            "number": {"required": False},
+            "lat": {"required": False},
+            "lng": {"required": False},
+            "image": {"required": False},
+        }
+
+    def validate_district(self, value):
+        if value not in DISTRICTS:
+            raise serializers.ValidationError("Unknown district.")
+        return value
+
+    def create(self, validated_data):
+        number = validated_data.get("number") or next_constituency_number()
+        validated_data["number"] = number
+        validated_data["code"] = constituency_code(number)
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        if "number" in validated_data:
+            validated_data["code"] = constituency_code(validated_data["number"])
+        return super().update(instance, validated_data)
+
+
+class DriverWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Driver
+        fields = ("name", "phone", "photo", "licence_number", "licence_expiry", "duty_status")
+        extra_kwargs = {
+            "phone": {"required": False},
+            "photo": {"required": False},
+            "licence_number": {"required": False},
+            "licence_expiry": {"required": False},
+            "duty_status": {"required": False},
+        }
+
+    def validate_duty_status(self, value):
+        if value not in DUTY_STATUSES:
+            raise serializers.ValidationError("Unknown duty status.")
+        return value
+
+
+class TelemetryWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = VehicleTelemetry
+        fields = (
+            "lat",
+            "lng",
+            "address",
+            "speed_kmh",
+            "ignition",
+            "led_on",
+            "gps_connected",
+            "last_update",
+            "trip_started",
+            "today_km",
+            "operating_min",
+        )
+
+
+class VehicleCreateSerializer(serializers.Serializer):
+    constituency = serializers.UUIDField()
+    registration = serializers.CharField(max_length=32)
+    driver_name = serializers.CharField(max_length=128)
+    driver_phone = serializers.CharField(max_length=32, required=False, allow_blank=True)
+    driver_licence_number = serializers.CharField(max_length=64, required=False, allow_blank=True)
+    driver_licence_expiry = serializers.DateField(required=False, allow_null=True)
+    driver_duty_status = serializers.CharField(required=False)
+    photo = serializers.ImageField(required=False)
+    plate_photo = serializers.ImageField(required=False)
+    led_photo = serializers.ImageField(required=False)
+    chassis_photo = serializers.ImageField(required=False)
+
+    def validate_constituency(self, value):
+        constituency = Constituency.objects.filter(pk=value).first()
+        if constituency is None:
+            raise serializers.ValidationError("Unknown constituency.")
+        return constituency
+
+    def validate_registration(self, value):
+        value = value.strip().upper()
+        if Vehicle.objects.filter(registration=value).exists():
+            raise serializers.ValidationError("Registration already exists.")
+        return value
+
+    def validate_driver_duty_status(self, value):
+        if value and value not in DUTY_STATUSES:
+            raise serializers.ValidationError("Unknown duty status.")
+        return value or DutyStatus.OFF_DUTY
+
+    def create(self, validated_data):
+        constituency = validated_data.pop("constituency")
+        driver = Driver.objects.create(
+            name=validated_data.pop("driver_name"),
+            phone=validated_data.pop("driver_phone", ""),
+            licence_number=validated_data.pop("driver_licence_number", ""),
+            licence_expiry=validated_data.pop("driver_licence_expiry", None),
+            duty_status=validated_data.pop("driver_duty_status", DutyStatus.OFF_DUTY),
+        )
+        serial = next_vehicle_serial(constituency)
+        vehicle = Vehicle.objects.create(
+            code=format_vehicle_code(constituency.district, constituency.number, serial),
+            registration=validated_data["registration"],
+            constituency=constituency,
+            driver=driver,
+            photo=validated_data.get("photo"),
+            plate_photo=validated_data.get("plate_photo"),
+            led_photo=validated_data.get("led_photo"),
+            chassis_photo=validated_data.get("chassis_photo"),
+        )
+        VehicleTelemetry.objects.create(vehicle=vehicle)
+        ensure_vehicle_documents(vehicle)
+        return vehicle
+
+
+class VehicleUpdateSerializer(serializers.Serializer):
+    constituency = serializers.UUIDField(required=False)
+    registration = serializers.CharField(max_length=32, required=False)
+    driver_name = serializers.CharField(max_length=128, required=False)
+    driver_phone = serializers.CharField(max_length=32, required=False, allow_blank=True)
+    driver_licence_number = serializers.CharField(max_length=64, required=False, allow_blank=True)
+    driver_licence_expiry = serializers.DateField(required=False, allow_null=True)
+    driver_duty_status = serializers.CharField(required=False)
+    photo = serializers.ImageField(required=False)
+    plate_photo = serializers.ImageField(required=False)
+    led_photo = serializers.ImageField(required=False)
+    chassis_photo = serializers.ImageField(required=False)
+    telemetry = TelemetryWriteSerializer(required=False)
+
+    def validate_constituency(self, value):
+        constituency = Constituency.objects.filter(pk=value).first()
+        if constituency is None:
+            raise serializers.ValidationError("Unknown constituency.")
+        return constituency
+
+    def validate_registration(self, value):
+        value = value.strip().upper()
+        queryset = Vehicle.objects.filter(registration=value)
+        if self.instance:
+            queryset = queryset.exclude(pk=self.instance.pk)
+        if queryset.exists():
+            raise serializers.ValidationError("Registration already exists.")
+        return value
+
+    def validate_driver_duty_status(self, value):
+        if value and value not in DUTY_STATUSES:
+            raise serializers.ValidationError("Unknown duty status.")
+        return value
+
+    def update(self, instance, validated_data):
+        telemetry_data = validated_data.pop("telemetry", None)
+        constituency = validated_data.pop("constituency", None)
+        if constituency is not None:
+            instance.constituency = constituency
+        if "registration" in validated_data:
+            instance.registration = validated_data["registration"]
+        for field in ("photo", "plate_photo", "led_photo", "chassis_photo"):
+            if field in validated_data:
+                setattr(instance, field, validated_data[field])
+        instance.save()
+
+        driver = instance.driver
+        mapping = {
+            "driver_name": "name",
+            "driver_phone": "phone",
+            "driver_licence_number": "licence_number",
+            "driver_licence_expiry": "licence_expiry",
+            "driver_duty_status": "duty_status",
+        }
+        driver_updated = False
+        for source, target in mapping.items():
+            if source in validated_data:
+                setattr(driver, target, validated_data[source])
+                driver_updated = True
+        if driver_updated:
+            driver.save()
+
+        if telemetry_data is not None:
+            telemetry, _ = VehicleTelemetry.objects.get_or_create(vehicle=instance)
+            for field, value in telemetry_data.items():
+                setattr(telemetry, field, value)
+            telemetry.save()
+        return instance
+
+
+class DocumentUpsertSerializer(serializers.Serializer):
+    file = serializers.FileField(required=False)
+    file_name = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    start_date = serializers.DateField(required=False, allow_null=True)
+    end_date = serializers.DateField(required=False, allow_null=True)
+
+    def update(self, instance, validated_data):
+        if "file" in validated_data:
+            instance.file = validated_data["file"]
+            instance.file_name = (
+                validated_data.get("file_name")
+                or getattr(validated_data["file"], "name", instance.file_name)
+            )
+        elif validated_data.get("file_name"):
+            instance.file_name = validated_data["file_name"]
+        if "start_date" in validated_data:
+            instance.start_date = validated_data["start_date"]
+        if "end_date" in validated_data:
+            instance.end_date = validated_data["end_date"]
+        instance.approval = ApprovalStatus.PENDING
+        instance.review_comment = ""
+        instance.reviewed_at = None
+        instance.reviewed_by = None
+        instance.save()
+        return instance
+
+
+class DocumentReviewSerializer(serializers.Serializer):
+    decision = serializers.ChoiceField(choices=APPROVAL_STATUSES)
+    comment = serializers.CharField(required=False, allow_blank=True)
+
+    def validate_decision(self, value):
+        if value not in (ApprovalStatus.APPROVED, ApprovalStatus.REJECTED):
+            raise serializers.ValidationError("Decision must be approved or rejected.")
+        return value

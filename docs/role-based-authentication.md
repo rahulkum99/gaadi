@@ -145,15 +145,15 @@ Only Super Admin can call user and role endpoints.
   "full_name": "Ward Head",
   "role": "constituency_head",
   "assignments": [
-    { "scope_type": "constituency", "object_id": "c-12" },
-    { "scope_type": "vehicle", "object_id": "v-9" }
+    { "scope_type": "constituency", "object_id": "4c29384c-b039-44c3-8207-ac293eda48db" },
+    { "scope_type": "constituency", "object_id": "8f1d2c0a-1111-4aaa-8222-bb33cc44dd55" }
   ]
 }
 ```
 
 `role` must be one of: `super_admin`, `finance`, `government_viewer`, `constituency_head`.
 
-`assignments` are optional. Use them for Constituency Head (and any other role whose scope is `assigned`) so later vehicle/constituency APIs can limit data to those IDs.
+`assignments` are optional. Super Admin assigns one or many real constituency UUIDs. Finance, Government Viewer, and Constituency Head then only see those constituencies on fleet APIs. Unknown constituency IDs are rejected.
 
 Other user endpoints:
 
@@ -163,7 +163,8 @@ Other user endpoints:
 | `GET` | `/api/v1/users/{uuid}/` | User detail |
 | `PATCH` | `/api/v1/users/{uuid}/` | Update `email`, `full_name`, `role`, `is_active`, optional `password` |
 | `DELETE` | `/api/v1/users/{uuid}/` | Deactivates the user. The row is not deleted. |
-| `GET` / `POST` | `/api/v1/users/{uuid}/assignments/` | List or add assignments |
+| `GET` / `POST` | `/api/v1/users/{uuid}/assignments/` | List or add one assignment |
+| `PUT` | `/api/v1/users/{uuid}/assignments/` | Replace the full assignment set |
 | `DELETE` | `/api/v1/users/{uuid}/assignments/{assignment_uuid}/` | Remove one assignment |
 
 The last remaining Super Admin cannot be deactivated or changed to another role.
@@ -231,7 +232,7 @@ Super Admin always passes `user_can()` regardless of the stored matrix.
 
 1. Super Admin logs in.
 2. Super Admin creates Finance, Government Viewer, and Constituency Head users.
-3. For Constituency Head, add constituency/vehicle assignments.
+3. Assign one or many constituencies to each non-admin user.
 4. That user logs in with email and password.
 5. The client reads `user.permissions` and shows only allowed screens.
 6. Each API still checks `HasModuleAccess` on the server.

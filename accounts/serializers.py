@@ -15,6 +15,15 @@ from accounts.services import effective_permissions
 User = get_user_model()
 
 
+def _uuid_exists(model, object_id):
+    from django.core.exceptions import ValidationError as DjangoValidationError
+
+    try:
+        return model.objects.filter(pk=object_id).exists()
+    except (DjangoValidationError, ValueError):
+        return False
+
+
 class RolePermissionSerializer(serializers.ModelSerializer):
     class Meta:
         model = RolePermission
@@ -69,10 +78,19 @@ class RoleUpdateSerializer(serializers.Serializer):
 
 
 class UserAssignmentSerializer(serializers.ModelSerializer):
+    constituency = serializers.SerializerMethodField()
+
     class Meta:
         model = UserAssignment
-        fields = ("id", "scope_type", "object_id", "created_at", "updated_at")
-        read_only_fields = ("id", "created_at", "updated_at")
+        fields = (
+            "id",
+            "scope_type",
+            "object_id",
+            "constituency",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = ("id", "constituency", "created_at", "updated_at")
 
     def validate_scope_type(self, value):
         if value not in ASSIGNMENT_SCOPE_TYPES:
@@ -83,6 +101,52 @@ class UserAssignmentSerializer(serializers.ModelSerializer):
         value = value.strip()
         if not value:
             raise serializers.ValidationError("object_id is required.")
+        return value
+
+    def validate(self, attrs):
+        scope_type = attrs.get("scope_type")
+        object_id = attrs.get("object_id")
+        if scope_type == "constituency":
+            from fleet.models import Constituency
+
+            if not _uuid_exists(Constituency, object_id):
+                raise serializers.ValidationError({"object_id": "Unknown constituency."})
+        elif scope_type == "vehicle":
+            from fleet.models import Vehicle
+
+            if not _uuid_exists(Vehicle, object_id):
+                raise serializers.ValidationError({"object_id": "Unknown vehicle."})
+        return attrs
+
+    def get_constituency(self, obj):
+        if obj.scope_type != "constituency":
+            return None
+        from fleet.models import Constituency
+
+        if not _uuid_exists(Constituency, obj.object_id):
+            return None
+        constituency = Constituency.objects.filter(pk=obj.object_id).first()
+        if constituency is None:
+            return None
+        return {
+            "id": str(constituency.id),
+            "code": constituency.code,
+            "number": constituency.number,
+            "name": constituency.name,
+            "district": constituency.district,
+        }
+
+
+class UserAssignmentReplaceSerializer(serializers.Serializer):
+    assignments = UserAssignmentSerializer(many=True)
+
+    def validate_assignments(self, value):
+        seen = set()
+        for item in value:
+            key = (item["scope_type"], item["object_id"])
+            if key in seen:
+                raise serializers.ValidationError("Duplicate assignments are not allowed.")
+            seen.add(key)
         return value
 
 

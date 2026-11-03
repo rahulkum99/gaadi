@@ -71,6 +71,7 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'base',
     'accounts',
+    'fleet',
 ]
 
 MIDDLEWARE = [
@@ -150,6 +151,8 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.1/howto/static-files/
 
 STATIC_URL = 'static/'
+MEDIA_URL = 'media/'
+MEDIA_ROOT = BASE_DIR / os.getenv('MEDIA_ROOT', 'media')
 
 
 # Email
@@ -240,6 +243,11 @@ LOGGING = {
             'propagate': False,
         },
         'accounts': {
+            'handlers': ['console', 'file'],
+            'level': os.getenv('LOG_LEVEL', 'INFO'),
+            'propagate': False,
+        },
+        'fleet': {
             'handlers': ['console', 'file'],
             'level': os.getenv('LOG_LEVEL', 'INFO'),
             'propagate': False,

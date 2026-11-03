@@ -112,6 +112,39 @@ class AccountsRBACTests(APITestCase):
         self.assertFalse(User.objects.filter(email="viewer@example.com").exists())
 
     def test_super_admin_creates_role_users_and_assignments(self):
+        from fleet.constants import District
+        from fleet.models import Constituency
+
+        constituency = Constituency.objects.create(
+            number=1,
+            code="AC01",
+            name="Mandrem",
+            district=District.NORTH_GOA,
+        )
+        self.authenticate(self.admin, "AdminPass123!")
+        response = self.client.post(
+            f"{API_V1}/users/",
+            {
+                "email": "head@example.com",
+                "password": "HeadPass123!",
+                "full_name": "Ward Head",
+                "role": RoleCode.CONSTITUENCY_HEAD,
+                "assignments": [
+                    {"scope_type": "constituency", "object_id": str(constituency.id)},
+                ],
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["role"], RoleCode.CONSTITUENCY_HEAD)
+        self.assertEqual(len(response.data["assignments"]), 1)
+        self.assertEqual(response.data["assignments"][0]["constituency"]["code"], "AC01")
+
+        created = User.objects.get(email="head@example.com")
+        self.assertFalse(created.is_superuser)
+        self.assertEqual(created.assignments.count(), 1)
+
+    def test_assignment_rejects_unknown_constituency(self):
         self.authenticate(self.admin, "AdminPass123!")
         response = self.client.post(
             f"{API_V1}/users/",
@@ -122,18 +155,11 @@ class AccountsRBACTests(APITestCase):
                 "role": RoleCode.CONSTITUENCY_HEAD,
                 "assignments": [
                     {"scope_type": "constituency", "object_id": "c-12"},
-                    {"scope_type": "vehicle", "object_id": "v-9"},
                 ],
             },
             format="json",
         )
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response.data["role"], RoleCode.CONSTITUENCY_HEAD)
-        self.assertEqual(len(response.data["assignments"]), 2)
-
-        created = User.objects.get(email="head@example.com")
-        self.assertFalse(created.is_superuser)
-        self.assertEqual(created.assignments.count(), 2)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_role_defaults_match_seeded_matrix(self):
         self.authenticate(self.admin, "AdminPass123!")

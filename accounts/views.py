@@ -1,6 +1,8 @@
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
+from django.db import IntegrityError
 from rest_framework import status
+from rest_framework.exceptions import ValidationError
 from rest_framework.generics import (
     DestroyAPIView,
     ListAPIView,
@@ -21,6 +23,7 @@ from accounts.serializers import (
     EmailTokenObtainPairSerializer,
     RoleSerializer,
     RoleUpdateSerializer,
+    UserAssignmentReplaceSerializer,
     UserAssignmentSerializer,
     UserCreateSerializer,
     UserSerializer,
@@ -188,7 +191,10 @@ class UserAssignmentListCreateView(ListCreateAPIView):
         return self.get_user().assignments.all()
 
     def perform_create(self, serializer):
-        assignment = serializer.save(user=self.get_user())
+        try:
+            assignment = serializer.save(user=self.get_user())
+        except IntegrityError as exc:
+            raise ValidationError({"object_id": "This assignment already exists."}) from exc
         logger.info(
             "assignment_created actor=%s user_id=%s scope=%s object_id=%s ip=%s",
             actor_label(self.request.user),
@@ -197,6 +203,24 @@ class UserAssignmentListCreateView(ListCreateAPIView):
             assignment.object_id,
             client_ip(self.request),
         )
+
+    def put(self, request, *args, **kwargs):
+        user = self.get_user()
+        serializer = UserAssignmentReplaceSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user.assignments.all().delete()
+        created = [
+            UserAssignment.objects.create(user=user, **item)
+            for item in serializer.validated_data["assignments"]
+        ]
+        logger.info(
+            "assignments_replaced actor=%s user_id=%s count=%s ip=%s",
+            actor_label(request.user),
+            user.pk,
+            len(created),
+            client_ip(request),
+        )
+        return Response(UserAssignmentSerializer(created, many=True).data)
 
 
 class UserAssignmentDestroyView(DestroyAPIView):
