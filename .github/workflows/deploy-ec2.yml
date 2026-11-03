@@ -1,0 +1,38 @@
+name: Deploy Django app to EC2
+
+on:
+  push:
+    branches:
+      - staging
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Deploy over SSH to EC2
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: ${{ secrets.EC2_SSH_PORT }}
+          script: |
+            set -e
+            mkdir -p ~/.ssh
+            ssh-keyscan -H github.com >> ~/.ssh/known_hosts
+            cd /home/ubuntu/gaadi
+            git fetch origin staging
+            git checkout staging
+            git reset --hard origin/staging
+
+            cat > .env << 'EOF'
+            ${{ secrets.ENV_FILE_STAGING }}
+            EOF
+
+            sudo docker compose down || true
+            sudo docker compose up -d --build
+
