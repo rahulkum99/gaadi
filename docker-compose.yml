@@ -1,0 +1,19 @@
+version: "3.9"
+
+services:
+  web:
+    build: .
+    container_name: gaadi-web
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    restart: unless-stopped
+    environment:
+      GUNICORN_WORKERS: 3
+      GUNICORN_TIMEOUT: 60
+    volumes:
+      - static_volume:/app/staticfiles
+
+volumes:
+  static_volume:

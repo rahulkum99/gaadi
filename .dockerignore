@@ -1,0 +1,83 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environment
+venv/
+env/
+myvenv/
+.venv/
+
+# Django
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Media Files
+media/
+
+# Static Files (if collected)
+staticfiles/
+static/
+# Environment Variables
+.env
+.env.*
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Migrations (optional)
+# */migrations/*
+# !*/migrations/__init__.py
+
+# Build Files
+build/
+dist/
+*.egg-info/
+
+# Celery
+celerybeat-schedule
+
+# Logs
+logs/
+*.log
+
+# PyCharm
+.idea/
+
+# VS Code
+.vscode/
+
+# AWS
+.aws/
+
+# Docker
+*.pid
+docker-compose.override.yml
+
+# Secrets
+*.pem
+*.key
+*.crt
+
+# Cache
+.cache/
+
+# Face Recognition Models (large binary files)
+models/
+*.onnx
