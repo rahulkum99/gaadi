@@ -4,8 +4,6 @@ services:
   web:
     build: .
     container_name: gaadi-web
-    ports:
-      - "8000:8000"
     env_file:
       - .env
     restart: unless-stopped
@@ -14,6 +12,23 @@ services:
       GUNICORN_TIMEOUT: 60
     volumes:
       - static_volume:/app/staticfiles
+      - media_volume:/app/media
+    expose:
+      - "8000"
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: gaadi-nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - static_volume:/app/staticfiles:ro
+      - media_volume:/app/media:ro
+    depends_on:
+      - web
+    restart: unless-stopped
 
 volumes:
   static_volume:
+  media_volume:
