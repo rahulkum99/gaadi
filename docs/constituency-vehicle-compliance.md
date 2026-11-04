@@ -127,7 +127,9 @@ Document types: `rc`, `insurance`, `puc`, `permit`, `fitness`, `election_commiss
 
 ## 6. Media
 
-Uploaded images and document files are stored under `MEDIA_ROOT` (default `media/`) and served from `/media/` when `DEBUG=True`.
+When `AWS_STORAGE_BUCKET_NAME` is set, uploads go to that S3 bucket (`media/` prefix, region `AWS_S3_REGION_NAME`). File URLs are signed unless `AWS_S3_QUERYSTRING_AUTH=False`.
+
+Without a bucket name, files stay under `MEDIA_ROOT` (default `media/`) and are served from `/media/` when `DEBUG=True`.
 
 ## 7. Tests
 
