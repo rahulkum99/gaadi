@@ -13,7 +13,6 @@ services:
       GUNICORN_WORKERS: 3
       GUNICORN_TIMEOUT: 60
     volumes:
-      - static_volume:/app/static
-
+      - static_volume:/app/staticfiles
 volumes:
   static_volume:
