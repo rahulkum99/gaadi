@@ -387,8 +387,8 @@ image=<file>
 ```json
 {
   "id": "c0ffee00-aaaa-4bbb-8ccc-ddddeeeeffff",
-  "code": "AC41",
-  "number": 41,
+  "code": "AC01",
+  "number": 1,
   "name": "New Ward",
   "district": "north_goa",
   "district_label": "North Goa",
@@ -420,9 +420,9 @@ A new constituency with no vehicles is always `inactive`.
 
 **Frontend notes:**
 
-- Do not send `code`. The server generates it.
+- Do not send `code`. The server generates it from `number`.
 - After create, append the returned object to the list or refetch `GET /constituencies/`.
-- Seed the 40 Goa constituencies with `python manage.py seed_fleet` in development instead of creating them one by one.
+- Super Admin must add every constituency with this endpoint. The server does not pre-load the 40 Goa seats.
 
 ---
 
@@ -1031,10 +1031,10 @@ Render `null` as a placeholder. Do not request `/media/` yourself unless the API
 
 ## 11. Seed data
 
-In development:
+Super Admin adds constituencies with `POST /api/v1/constituencies/`. After at least one exists, development can attach a small demo fleet:
 
 ```bash
 python manage.py seed_fleet
 ```
 
-That creates the 40 Goa constituencies (`AC01` Mandrem through `AC40` Canacona) and a small demo fleet.
+That command does **not** create constituencies. If none exist, it prints a warning and exits.

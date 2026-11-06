@@ -1155,4 +1155,4 @@ In development:
 python manage.py seed_fleet
 ```
 
-That creates the 40 Goa constituencies and a small demo fleet with drivers and telemetry you can use against these endpoints.
+That attaches a small demo fleet (drivers and telemetry) onto constituencies Super Admin has already created with `POST /api/v1/constituencies/`. It does not create constituencies.

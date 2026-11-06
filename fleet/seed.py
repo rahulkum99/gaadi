@@ -4,31 +4,26 @@ from django.utils import timezone
 
 from fleet.constants import (
     DOCUMENT_TYPES,
-    GOA_CONSTITUENCIES,
     ApprovalStatus,
     DocumentType,
     DutyStatus,
-    constituency_code,
     format_vehicle_code,
 )
 from fleet.models import Constituency, Driver, Vehicle, VehicleDocument, VehicleTelemetry
 
 
-def seed_goa_constituencies():
-    created = 0
-    for number, name, district, lat, lng in GOA_CONSTITUENCIES:
-        _, was_created = Constituency.objects.get_or_create(
-            number=number,
-            defaults={
-                "code": constituency_code(number),
-                "name": name,
-                "district": district,
-                "lat": lat,
-                "lng": lng,
-            },
-        )
-        created += int(was_created)
-    return created
+def _demo_constituencies():
+    ordered = list(Constituency.objects.order_by("number"))
+    if not ordered:
+        return None, None, None
+    by_number = {item.number: item for item in ordered}
+
+    def pick(number, index):
+        if number in by_number:
+            return by_number[number]
+        return ordered[min(index, len(ordered) - 1)]
+
+    return pick(1, 0), pick(11, 1), pick(31, 2)
 
 
 def _ensure_documents(vehicle, specs):
@@ -50,10 +45,9 @@ def _ensure_documents(vehicle, specs):
 def seed_demo_fleet():
     now = timezone.now()
     today = now.date()
-    seed_goa_constituencies()
-    mandrem = Constituency.objects.get(number=1)
-    panaji = Constituency.objects.get(number=11)
-    margao = Constituency.objects.get(number=31)
+    mandrem, panaji, margao = _demo_constituencies()
+    if mandrem is None:
+        return 0
 
     demo = (
         {

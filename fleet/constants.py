@@ -225,49 +225,6 @@ OPERATING_START_HOUR = PLATFORM_DEFAULTS["operating_start_hour"]
 OPERATING_END_HOUR = PLATFORM_DEFAULTS["operating_end_hour"]
 LIVE_SNAPSHOT_MINUTES = 5
 
-GOA_CONSTITUENCIES = (
-    (1, "Mandrem", District.NORTH_GOA, 15.663, 73.721),
-    (2, "Pernem", District.NORTH_GOA, 15.717, 73.797),
-    (3, "Bicholim", District.NORTH_GOA, 15.6, 73.949),
-    (4, "Tivim", District.NORTH_GOA, 15.598, 73.853),
-    (5, "Mapusa", District.NORTH_GOA, 15.591, 73.808),
-    (6, "Siolim", District.NORTH_GOA, 15.623, 73.768),
-    (7, "Saligao", District.NORTH_GOA, 15.548, 73.789),
-    (8, "Calangute", District.NORTH_GOA, 15.544, 73.755),
-    (9, "Porvorim", District.NORTH_GOA, 15.532, 73.831),
-    (10, "Aldona", District.NORTH_GOA, 15.591, 73.874),
-    (11, "Panaji", District.NORTH_GOA, 15.491, 73.828),
-    (12, "Taleigao", District.NORTH_GOA, 15.473, 73.821),
-    (13, "Santa Cruz", District.NORTH_GOA, 15.478, 73.858),
-    (14, "St. Andre", District.NORTH_GOA, 15.502, 73.908),
-    (15, "Cumbarjua", District.NORTH_GOA, 15.522, 73.951),
-    (16, "Maem", District.NORTH_GOA, 15.548, 73.982),
-    (17, "Sanquelim", District.NORTH_GOA, 15.564, 74.008),
-    (18, "Poriem", District.NORTH_GOA, 15.618, 74.048),
-    (19, "Valpoi", District.NORTH_GOA, 15.532, 74.137),
-    (20, "Priol", District.NORTH_GOA, 15.448, 74.018),
-    (21, "Ponda", District.NORTH_GOA, 15.403, 74.015),
-    (22, "Siroda", District.NORTH_GOA, 15.361, 74.021),
-    (23, "Marcaim", District.NORTH_GOA, 15.421, 73.981),
-    (24, "Mormugao", District.SOUTH_GOA, 15.409, 73.791),
-    (25, "Vasco Da Gama", District.SOUTH_GOA, 15.398, 73.811),
-    (26, "Dabolim", District.SOUTH_GOA, 15.381, 73.848),
-    (27, "Cortalim", District.SOUTH_GOA, 15.372, 73.908),
-    (28, "Nuvem", District.SOUTH_GOA, 15.318, 73.941),
-    (29, "Curtorim", District.SOUTH_GOA, 15.282, 74.021),
-    (30, "Fatorda", District.SOUTH_GOA, 15.289, 73.971),
-    (31, "Margao", District.SOUTH_GOA, 15.274, 73.958),
-    (32, "Benaulim", District.SOUTH_GOA, 15.258, 73.928),
-    (33, "Navelim", District.SOUTH_GOA, 15.251, 73.981),
-    (34, "Cuncolim", District.SOUTH_GOA, 15.178, 73.994),
-    (35, "Velim", District.SOUTH_GOA, 15.162, 73.968),
-    (36, "Quepem", District.SOUTH_GOA, 15.213, 74.071),
-    (37, "Curchorem", District.SOUTH_GOA, 15.264, 74.108),
-    (38, "Sanvordem", District.SOUTH_GOA, 15.269, 74.131),
-    (39, "Sanguem", District.SOUTH_GOA, 15.229, 74.151),
-    (40, "Canacona", District.SOUTH_GOA, 15.018, 74.021),
-)
-
 
 def constituency_code(number):
     return f"AC{int(number):02d}"

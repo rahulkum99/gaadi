@@ -83,7 +83,7 @@ Module: `constituencies`. List and detail need `view`. Create and edit need `edi
 
 List rows include `code`, `number`, `name`, `image`, `total`, `active`, `inactive`, `attention`, and derived `status`.
 
-Seed 40 Goa constituencies and a small demo fleet:
+Super Admin adds constituencies with `POST /api/v1/constituencies/`. After that, development can attach a small demo fleet (this does not create constituencies):
 
 ```bash
 python manage.py seed_fleet
