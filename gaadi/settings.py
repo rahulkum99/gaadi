@@ -73,10 +73,38 @@ CORS_ALLOW_HEADERS = (
     "x-csrftoken",
     "x-requested-with",
 )
-CSRF_TRUSTED_ORIGINS = _env_list(
-    "CSRF_TRUSTED_ORIGINS",
-    ",".join(CORS_ALLOWED_ORIGINS),
+def _host_origins(hosts):
+    origins = []
+    for host in hosts:
+        host = host.strip()
+        if not host or host == "*" or host.startswith("["):
+            continue
+        if host.startswith("."):
+            host = host[1:]
+        if "://" in host:
+            origins.append(host.rstrip("/"))
+            continue
+        origins.append(f"https://{host}")
+        origins.append(f"http://{host}")
+    return origins
+
+
+CSRF_TRUSTED_ORIGINS = list(
+    dict.fromkeys(
+        _env_list("CSRF_TRUSTED_ORIGINS")
+        + CORS_ALLOWED_ORIGINS
+        + _host_origins(ALLOWED_HOSTS)
+        + [
+            "http://localhost:8000",
+            "http://127.0.0.1:8000",
+        ]
+    )
 )
+
+# Docker / nginx / ALB terminate TLS. Trust the forwarded scheme so admin CSRF
+# matches https:// origins while Gunicorn still sees HTTP inside the container.
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+USE_X_FORWARDED_HOST = _env_bool("USE_X_FORWARDED_HOST", True)
 
 
 # Application definition
