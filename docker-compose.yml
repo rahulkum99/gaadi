@@ -12,3 +12,13 @@ services:
     environment:
       GUNICORN_WORKERS: 3
       GUNICORN_TIMEOUT: 60
+
+  live-ingest:
+    build: .
+    container_name: gaadi-live-ingest
+    env_file:
+      - .env
+    restart: unless-stopped
+    entrypoint: ["sh", "/app/live_ingest.sh"]
+    environment:
+      LIVE_INGEST_INTERVAL_SECONDS: 300

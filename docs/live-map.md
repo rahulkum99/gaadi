@@ -258,10 +258,18 @@ GET https://pullapi-s1.track360.co.in/api/v1/auth/pull_api?username=...&password
 Accept: application/json
 ```
 
-Save a GPS snapshot and raise alerts every 5 minutes (Windows Task Scheduler or cron):
+Save a GPS snapshot and raise alerts every 5 minutes. Docker Compose runs this as `live-ingest` (`gaadi-live-ingest`) next to the web container:
+
+```
+sudo docker compose up -d --build
+```
+
+That service loops `python manage.py pull_live_fleet` every 300 seconds. Override with `LIVE_INGEST_INTERVAL_SECONDS` if needed.
+
+Without Docker, schedule the same command (Windows Task Scheduler or cron):
 
 ```
 python manage.py pull_live_fleet
 ```
 
-Live Map GET also writes a snapshot if 5 minutes have passed, so a busy map still records history. The scheduled command is required when nobody has the map open.
+Live Map GET also writes a snapshot if 5 minutes have passed, so a busy map still records history. The ingest container is required when nobody has the map open.

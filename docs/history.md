@@ -2,7 +2,7 @@
 
 Frontend integration guide for `/history` and `/history/:vehicleId/:date`.
 
-History is built from GPS points saved every 5 minutes (`python manage.py pull_live_fleet`, also triggered from Live Map at that interval). Stop detection uses platform settings: stops shorter than `min_stop_minutes` are ignored; stops at or above `long_halt_minutes` are long halts. Operating minutes accumulate only inside `operating_start_hour`–`operating_end_hour`.
+History is built from GPS points saved every 5 minutes. Docker Compose runs this in the `live-ingest` service (`python manage.py pull_live_fleet` on a 300s loop). Live Map GET also writes a snapshot if that interval has passed. Stop detection uses platform settings: stops shorter than `min_stop_minutes` are ignored; stops at or above `long_halt_minutes` are long halts. Operating minutes accumulate only inside `operating_start_hour`–`operating_end_hour`.
 
 There is no route playback. An old `/playback` URL should open History.
 
