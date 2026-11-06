@@ -131,38 +131,99 @@ APPROVAL_STATUSES = (
 
 
 class AlertType:
-    KM_EXCEEDED = "km_exceeded"
+    VEHICLE_STARTED = "vehicle_started"
+    VEHICLE_STOPPED = "vehicle_stopped"
     LONG_HALT = "long_halt"
     LED_OFF = "led_off"
+    KM_EXCEEDED = "km_exceeded"
     GPS_DISCONNECTED = "gps_disconnected"
 
 
 ALERT_TYPES = (
-    AlertType.KM_EXCEEDED,
+    AlertType.VEHICLE_STARTED,
+    AlertType.VEHICLE_STOPPED,
     AlertType.LONG_HALT,
     AlertType.LED_OFF,
+    AlertType.KM_EXCEEDED,
     AlertType.GPS_DISCONNECTED,
 )
 
 ALERT_SEVERITY = {
-    AlertType.KM_EXCEEDED: "critical",
-    AlertType.GPS_DISCONNECTED: "critical",
+    AlertType.VEHICLE_STARTED: "info",
+    AlertType.VEHICLE_STOPPED: "info",
     AlertType.LONG_HALT: "warning",
     AlertType.LED_OFF: "warning",
+    AlertType.KM_EXCEEDED: "critical",
+    AlertType.GPS_DISCONNECTED: "critical",
 }
 
 ALERT_LABELS = {
-    AlertType.KM_EXCEEDED: "60 km daily limit exceeded",
-    AlertType.GPS_DISCONNECTED: "GPS disconnected",
+    AlertType.VEHICLE_STARTED: "Vehicle started",
+    AlertType.VEHICLE_STOPPED: "Vehicle stopped",
     AlertType.LONG_HALT: "Long halt detected",
     AlertType.LED_OFF: "LED TV switched off",
+    AlertType.KM_EXCEEDED: "Daily km limit exceeded",
+    AlertType.GPS_DISCONNECTED: "GPS disconnected",
 }
 
-DAILY_KM_LIMIT = 60
-LONG_HALT_MINUTES = 60
-STALE_GPS_MINUTES = 15
-EXPIRE_SOON_DAYS = 30
-EXPIRE_WATCH_DAYS = 60
+ALERT_KPI_TYPES = (
+    AlertType.KM_EXCEEDED,
+    AlertType.LONG_HALT,
+    AlertType.LED_OFF,
+    AlertType.GPS_DISCONNECTED,
+    AlertType.VEHICLE_STARTED,
+)
+
+UNREAD_ALERT_SEVERITIES = ("warning", "critical")
+
+
+class ReportKind:
+    DAILY = "daily"
+    CONSTITUENCY = "constituency"
+    VEHICLE = "vehicle"
+    ROUTE = "route"
+    ALERT = "alert"
+    DOCUMENTS = "documents"
+
+
+REPORT_KINDS = (
+    ReportKind.DAILY,
+    ReportKind.CONSTITUENCY,
+    ReportKind.VEHICLE,
+    ReportKind.ROUTE,
+    ReportKind.ALERT,
+    ReportKind.DOCUMENTS,
+)
+
+FINANCE_REPORT_KINDS = (
+    ReportKind.DAILY,
+    ReportKind.CONSTITUENCY,
+    ReportKind.VEHICLE,
+    ReportKind.DOCUMENTS,
+)
+
+PLATFORM_DEFAULTS = {
+    "daily_km_limit": 60,
+    "long_halt_minutes": 60,
+    "min_stop_minutes": 5,
+    "stale_gps_minutes": 15,
+    "expire_soon_days": 30,
+    "expire_watch_days": 60,
+    "approach_ratio": 0.9,
+    "operating_start_hour": 8,
+    "operating_end_hour": 18,
+}
+
+DAILY_KM_LIMIT = PLATFORM_DEFAULTS["daily_km_limit"]
+LONG_HALT_MINUTES = PLATFORM_DEFAULTS["long_halt_minutes"]
+MIN_STOP_MINUTES = PLATFORM_DEFAULTS["min_stop_minutes"]
+STALE_GPS_MINUTES = PLATFORM_DEFAULTS["stale_gps_minutes"]
+EXPIRE_SOON_DAYS = PLATFORM_DEFAULTS["expire_soon_days"]
+EXPIRE_WATCH_DAYS = PLATFORM_DEFAULTS["expire_watch_days"]
+APPROACH_RATIO = PLATFORM_DEFAULTS["approach_ratio"]
+OPERATING_START_HOUR = PLATFORM_DEFAULTS["operating_start_hour"]
+OPERATING_END_HOUR = PLATFORM_DEFAULTS["operating_end_hour"]
+LIVE_SNAPSHOT_MINUTES = 5
 
 GOA_CONSTITUENCIES = (
     (1, "Mandrem", District.NORTH_GOA, 15.663, 73.721),

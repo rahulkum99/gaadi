@@ -9,17 +9,24 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.audit import actor_label, client_ip
-from accounts.constants import Level, Module
+from accounts.constants import Level, Module, RoleCode
 from accounts.permissions import HasModuleAccess
-from fleet.alerts import build_alerts
+from fleet.alerts import build_alert_detail, build_alerts, build_alerts_index
+from fleet.live_map import build_live_map
 from fleet.constants import (
     CONSTITUENCY_STATUSES,
     DOCUMENT_TYPES,
     DOCUMENT_VALIDITIES,
     FILTER_STATUSES,
+    REPORT_KINDS,
     DocumentValidity,
+    ReportKind,
 )
+from fleet.dates import parse_history_range, parse_query_date
+from fleet.history import build_history_day, build_history_list
 from fleet.models import Constituency, Vehicle, VehicleDocument
+from fleet.platform import reset_platform_settings, save_platform_settings, serialize_platform_settings
+from fleet.reports import allowed_report_kinds, build_report, can_export_reports
 from fleet.scoping import (
     can_access_constituency,
     can_access_vehicle,
@@ -30,6 +37,7 @@ from fleet.serializers import (
     ConstituencyWriteSerializer,
     DocumentReviewSerializer,
     DocumentUpsertSerializer,
+    PlatformSettingsSerializer,
     VehicleCreateSerializer,
     VehicleUpdateSerializer,
 )
@@ -46,6 +54,20 @@ from fleet.services import (
 )
 
 logger = logging.getLogger("fleet")
+
+
+def _csv_response(filename, fieldnames, rows):
+    response = HttpResponse(content_type="text/csv")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    writer = csv.DictWriter(response, fieldnames=fieldnames, extrasaction="ignore")
+    writer.writeheader()
+    writer.writerows(rows)
+    return response
+
+
+def _is_finance(user):
+    role = getattr(user, "role", None)
+    return bool(role and role.code == RoleCode.FINANCE)
 
 
 def _constituency_queryset():
@@ -256,6 +278,52 @@ class ConstituencyReportView(APIView):
                 "alerts": len(alerts),
             }
         )
+
+
+class LiveMapView(APIView):
+    def get_permissions(self):
+        if self.request.query_params.get("export") == "csv":
+            return [HasModuleAccess(Module.EXPORT_DATA, Level.VIEW)()]
+        return [HasModuleAccess(Module.LIVE_MAP, Level.VIEW)()]
+
+    def get(self, request, **kwargs):
+        if request.query_params.get("export") == "csv" and _is_finance(request.user):
+            return Response({"detail": "Finance cannot export the live map."}, status=status.HTTP_403_FORBIDDEN)
+        payload, error = build_live_map(request.user, request=request, params=request.query_params)
+        if error:
+            return Response({"detail": error}, status=status.HTTP_400_BAD_REQUEST)
+        if request.query_params.get("export") == "csv":
+            response = HttpResponse(content_type="text/csv")
+            response["Content-Disposition"] = 'attachment; filename="live-map.csv"'
+            writer = csv.DictWriter(
+                response,
+                fieldnames=[
+                    "vehicle",
+                    "registration",
+                    "constituency",
+                    "driver",
+                    "status",
+                    "today_km",
+                    "speed_kmh",
+                    "location",
+                ],
+            )
+            writer.writeheader()
+            for row in payload["vehicles"]:
+                writer.writerow(
+                    {
+                        "vehicle": row["code"],
+                        "registration": row["registration"],
+                        "constituency": row["constituency"]["name"],
+                        "driver": row["driver"]["name"],
+                        "status": row["status"],
+                        "today_km": row["today_km"],
+                        "speed_kmh": row["speed_kmh"],
+                        "location": row["location"],
+                    }
+                )
+            return response
+        return Response(payload)
 
 
 class VehicleListCreateView(APIView):
@@ -530,4 +598,222 @@ class DocumentReportView(APIView):
             writer.writeheader()
             writer.writerows(report_rows)
             return response
-        return Response({"rows": report_rows, "counts": counts})
+        return Response({"kind": "documents", "rows": report_rows, "counts": counts})
+
+
+class PlatformSettingsView(APIView):
+    def get_permissions(self):
+        min_level = Level.EDIT if self.request.method in {"PUT", "PATCH", "POST"} else Level.VIEW
+        return [HasModuleAccess(Module.SYSTEM_SETTINGS, min_level)()]
+
+    def get(self, request, **kwargs):
+        return Response(serialize_platform_settings())
+
+    def put(self, request, **kwargs):
+        return self._save(request, partial=False)
+
+    def patch(self, request, **kwargs):
+        return self._save(request, partial=True)
+
+    def post(self, request, **kwargs):
+        if request.query_params.get("reset") == "true" or request.data.get("reset"):
+            settings = reset_platform_settings(user=request.user)
+            logger.info("platform_settings_reset actor=%s ip=%s", actor_label(request.user), client_ip(request))
+            return Response(serialize_platform_settings(settings))
+        return self._save(request, partial=True)
+
+    def _save(self, request, partial):
+        from fleet.platform import get_platform_settings
+
+        serializer = PlatformSettingsSerializer(
+            instance=get_platform_settings(),
+            data=request.data,
+            partial=partial,
+        )
+        serializer.is_valid(raise_exception=True)
+        settings = save_platform_settings(serializer.validated_data, user=request.user)
+        logger.info("platform_settings_updated actor=%s ip=%s", actor_label(request.user), client_ip(request))
+        return Response(serialize_platform_settings(settings))
+
+
+class PlatformSettingsResetView(APIView):
+    permission_classes = [HasModuleAccess(Module.SYSTEM_SETTINGS, Level.EDIT)]
+
+    def post(self, request, **kwargs):
+        settings = reset_platform_settings(user=request.user)
+        logger.info("platform_settings_reset actor=%s ip=%s", actor_label(request.user), client_ip(request))
+        return Response(serialize_platform_settings(settings))
+
+
+class AlertListView(APIView):
+    permission_classes = [HasModuleAccess(Module.ALERTS, Level.VIEW)]
+
+    def get(self, request, **kwargs):
+        payload, error = build_alerts_index(request.user, request.query_params)
+        if error:
+            return Response({"detail": error}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(payload)
+
+
+class AlertDetailView(APIView):
+    permission_classes = [HasModuleAccess(Module.ALERTS, Level.VIEW)]
+
+    def get(self, request, pk, **kwargs):
+        payload, error = build_alert_detail(request.user, pk)
+        if error:
+            return Response({"detail": error}, status=status.HTTP_404_NOT_FOUND)
+        return Response(payload)
+
+
+def _history_vehicles(user):
+    return list(scoped_vehicles(user).select_related("constituency", "driver", "telemetry"))
+
+
+def _history_vehicle_options(vehicles):
+    return [
+        {
+            "id": str(vehicle.id),
+            "code": vehicle.code,
+            "registration": vehicle.registration,
+            "label": f"{vehicle.code} · {vehicle.registration}",
+        }
+        for vehicle in vehicles
+    ]
+
+
+class HistoryListView(APIView):
+    permission_classes = [HasModuleAccess(Module.VEHICLE_HISTORY, Level.VIEW)]
+
+    def get(self, request, **kwargs):
+        vehicles = _history_vehicles(request.user)
+        options = _history_vehicle_options(vehicles)
+        vehicle_id = (request.query_params.get("vehicle") or "").strip()
+        selected = None
+        if vehicle_id:
+            selected = next((item for item in vehicles if str(item.id) == vehicle_id), None)
+        elif vehicles:
+            selected = vehicles[0]
+        if selected is None and vehicle_id:
+            return Response({"detail": "Vehicle not found."}, status=status.HTTP_404_NOT_FOUND)
+        start, end, error = parse_history_range(request.query_params)
+        if error:
+            return Response({"detail": error}, status=status.HTTP_400_BAD_REQUEST)
+        payload = {
+            "vehicles": options,
+            "vehicle": None,
+            "range": {"from": start.isoformat(), "to": end.isoformat()},
+            "kpis": {
+                "total_km": 0,
+                "avg_km": 0,
+                "operating_min": 0,
+                "operating": "0m",
+                "halt_min": 0,
+                "halt": "0m",
+                "stops": 0,
+                "long_halts": 0,
+            },
+            "chart": [],
+            "average_km": 0,
+            "days": [],
+        }
+        if selected is None:
+            return Response(payload)
+        built = build_history_list(selected, start, end)
+        built["vehicles"] = options
+        return Response(built)
+
+
+class HistoryDayView(APIView):
+    permission_classes = [HasModuleAccess(Module.VEHICLE_HISTORY, Level.VIEW)]
+
+    def get(self, request, vehicle_id, day, **kwargs):
+        vehicle = _require_vehicle(request.user, vehicle_id)
+        if vehicle is None:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        parsed = parse_query_date(day, default=None)
+        if parsed is None:
+            return Response({"detail": "Unknown date."}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(build_history_day(vehicle, parsed))
+
+
+class ReportIndexView(APIView):
+    permission_classes = [HasModuleAccess(Module.REPORTS, Level.VIEW)]
+
+    def get(self, request, **kwargs):
+        kinds = allowed_report_kinds(request.user)
+        return Response(
+            {
+                "kinds": kinds,
+                "can_export": can_export_reports(request.user),
+                "default_kind": kinds[0] if kinds else None,
+            }
+        )
+
+
+class ReportDetailView(APIView):
+    def get_permissions(self):
+        if self.request.query_params.get("export") == "csv":
+            return [HasModuleAccess(Module.EXPORT_DATA, Level.VIEW)()]
+        return [HasModuleAccess(Module.REPORTS, Level.VIEW)()]
+
+    def get(self, request, kind, **kwargs):
+        if kind == "document-expiry":
+            kind = ReportKind.DOCUMENTS
+        if kind == ReportKind.DOCUMENTS:
+            view = DocumentReportView()
+            view.request = request
+            view.format_kwarg = getattr(self, "format_kwarg", None)
+            return view.get(request, **kwargs)
+        allowed = allowed_report_kinds(request.user)
+        if kind not in REPORT_KINDS:
+            return Response(
+                {"detail": "Unknown report.", "allowed": allowed},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if kind not in allowed:
+            return Response(
+                {"detail": "This report is not available for your role.", "allowed": allowed},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        payload, error = build_report(request.user, kind, request.query_params)
+        if error:
+            return Response({"detail": error}, status=status.HTTP_400_BAD_REQUEST)
+        if request.query_params.get("export") == "csv":
+            return _report_csv(kind, payload)
+        return Response(payload)
+
+
+def _report_csv(kind, payload):
+    if kind == ReportKind.DAILY:
+        rows = payload.get("constituencies") or []
+        return _csv_response(
+            "daily-report.csv",
+            ["code", "name", "vehicles", "km"],
+            rows,
+        )
+    if kind == ReportKind.CONSTITUENCY:
+        return _csv_response(
+            "constituency-report.csv",
+            ["code", "name", "assigned", "active", "inactive", "total_km", "avg_km", "alerts"],
+            payload.get("rows") or [],
+        )
+    if kind == ReportKind.VEHICLE:
+        return _csv_response(
+            "vehicle-report.csv",
+            ["code", "registration", "constituency", "driver", "km", "operating", "stops", "halts", "alerts", "status"],
+            payload.get("rows") or [],
+        )
+    if kind == ReportKind.ROUTE:
+        return _csv_response(
+            "route-report.csv",
+            ["code", "registration", "start", "end", "km", "operating", "halt", "stops"],
+            payload.get("rows") or [],
+        )
+    if kind == ReportKind.ALERT:
+        return _csv_response(
+            "alert-report.csv",
+            ["time", "type", "vehicle", "constituency", "description"],
+            payload.get("rows") or [],
+        )
+    return _csv_response("report.csv", [], [])
+

@@ -89,6 +89,7 @@ class Driver(TimeStampedUUIDModel):
 class Vehicle(TimeStampedUUIDModel):
     code = models.CharField(max_length=32, unique=True)
     registration = models.CharField(max_length=32, unique=True)
+    imei = models.CharField(max_length=32, unique=True, blank=True, null=True)
     constituency = models.ForeignKey(
         Constituency,
         on_delete=models.PROTECT,
@@ -110,6 +111,11 @@ class Vehicle(TimeStampedUUIDModel):
     def __str__(self):
         return self.code
 
+    def save(self, *args, **kwargs):
+        if self.imei is not None:
+            self.imei = str(self.imei).strip() or None
+        super().save(*args, **kwargs)
+
 
 class VehicleTelemetry(TimeStampedUUIDModel):
     vehicle = models.OneToOneField(
@@ -128,12 +134,96 @@ class VehicleTelemetry(TimeStampedUUIDModel):
     trip_started = models.BooleanField(default=False)
     today_km = models.FloatField(default=0)
     operating_min = models.PositiveIntegerField(default=0)
+    halt_started_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         verbose_name_plural = "vehicle telemetry"
 
     def __str__(self):
         return f"telemetry:{self.vehicle.code}"
+
+
+class PlatformSettings(TimeStampedUUIDModel):
+    singleton_key = models.PositiveSmallIntegerField(default=1, unique=True, editable=False)
+    daily_km_limit = models.FloatField(default=60)
+    long_halt_minutes = models.PositiveIntegerField(default=60)
+    min_stop_minutes = models.PositiveIntegerField(default=5)
+    stale_gps_minutes = models.PositiveIntegerField(default=15)
+    expire_soon_days = models.PositiveIntegerField(default=30)
+    expire_watch_days = models.PositiveIntegerField(default=60)
+    approach_ratio = models.FloatField(default=0.9)
+    operating_start_hour = models.PositiveSmallIntegerField(default=8)
+    operating_end_hour = models.PositiveSmallIntegerField(default=18)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="platform_settings_updates",
+    )
+
+    class Meta:
+        verbose_name_plural = "platform settings"
+
+    def __str__(self):
+        return "platform settings"
+
+
+class VehicleGpsPoint(TimeStampedUUIDModel):
+    vehicle = models.ForeignKey(
+        Vehicle,
+        on_delete=models.CASCADE,
+        related_name="gps_points",
+    )
+    captured_at = models.DateTimeField(db_index=True)
+    lat = models.FloatField(null=True, blank=True)
+    lng = models.FloatField(null=True, blank=True)
+    address = models.CharField(max_length=255, blank=True)
+    speed_kmh = models.FloatField(default=0)
+    ignition = models.BooleanField(default=False)
+    led_on = models.BooleanField(default=False)
+    gps_connected = models.BooleanField(default=False)
+    today_km = models.FloatField(default=0)
+    operating_min = models.PositiveIntegerField(default=0)
+    course = models.FloatField(null=True, blank=True)
+
+    class Meta:
+        ordering = ("captured_at",)
+        indexes = (
+            models.Index(fields=("vehicle", "captured_at")),
+        )
+
+    def __str__(self):
+        return f"{self.vehicle.code}@{self.captured_at.isoformat()}"
+
+
+class AlertEvent(TimeStampedUUIDModel):
+    vehicle = models.ForeignKey(
+        Vehicle,
+        on_delete=models.CASCADE,
+        related_name="alert_events",
+    )
+    alert_type = models.CharField(max_length=32)
+    severity = models.CharField(max_length=16)
+    description = models.CharField(max_length=255)
+    occurred_at = models.DateTimeField(db_index=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    lat = models.FloatField(null=True, blank=True)
+    lng = models.FloatField(null=True, blank=True)
+    address = models.CharField(max_length=255, blank=True)
+    today_km = models.FloatField(default=0)
+    speed_kmh = models.FloatField(default=0)
+    dedupe_key = models.CharField(max_length=160, unique=True)
+
+    class Meta:
+        ordering = ("-occurred_at",)
+        indexes = (
+            models.Index(fields=("vehicle", "occurred_at")),
+            models.Index(fields=("alert_type", "occurred_at")),
+        )
+
+    def __str__(self):
+        return f"{self.vehicle.code}:{self.alert_type}"
 
 
 class VehicleDocument(TimeStampedUUIDModel):

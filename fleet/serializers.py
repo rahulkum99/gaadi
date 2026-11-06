@@ -5,12 +5,13 @@ from fleet.constants import (
     DISTRICTS,
     DOCUMENT_TYPES,
     DUTY_STATUSES,
+    PLATFORM_DEFAULTS,
     ApprovalStatus,
     DutyStatus,
     constituency_code,
     format_vehicle_code,
 )
-from fleet.models import Constituency, Driver, Vehicle, VehicleTelemetry
+from fleet.models import Constituency, Driver, PlatformSettings, Vehicle, VehicleTelemetry
 from fleet.services import ensure_vehicle_documents, next_constituency_number, next_vehicle_serial
 
 
@@ -75,12 +76,14 @@ class TelemetryWriteSerializer(serializers.ModelSerializer):
             "trip_started",
             "today_km",
             "operating_min",
+            "halt_started_at",
         )
 
 
 class VehicleCreateSerializer(serializers.Serializer):
     constituency = serializers.UUIDField()
     registration = serializers.CharField(max_length=32)
+    imei = serializers.CharField(max_length=32, required=False, allow_blank=True, allow_null=True)
     driver_name = serializers.CharField(max_length=128)
     driver_phone = serializers.CharField(max_length=32, required=False, allow_blank=True)
     driver_licence_number = serializers.CharField(max_length=64, required=False, allow_blank=True)
@@ -103,6 +106,14 @@ class VehicleCreateSerializer(serializers.Serializer):
             raise serializers.ValidationError("Registration already exists.")
         return value
 
+    def validate_imei(self, value):
+        value = (value or "").strip()
+        if not value:
+            return None
+        if Vehicle.objects.filter(imei=value).exists():
+            raise serializers.ValidationError("IMEI already exists.")
+        return value
+
     def validate_driver_duty_status(self, value):
         if value and value not in DUTY_STATUSES:
             raise serializers.ValidationError("Unknown duty status.")
@@ -121,6 +132,7 @@ class VehicleCreateSerializer(serializers.Serializer):
         vehicle = Vehicle.objects.create(
             code=format_vehicle_code(constituency.district, constituency.number, serial),
             registration=validated_data["registration"],
+            imei=validated_data.get("imei"),
             constituency=constituency,
             driver=driver,
             photo=validated_data.get("photo"),
@@ -136,6 +148,7 @@ class VehicleCreateSerializer(serializers.Serializer):
 class VehicleUpdateSerializer(serializers.Serializer):
     constituency = serializers.UUIDField(required=False)
     registration = serializers.CharField(max_length=32, required=False)
+    imei = serializers.CharField(max_length=32, required=False, allow_blank=True, allow_null=True)
     driver_name = serializers.CharField(max_length=128, required=False)
     driver_phone = serializers.CharField(max_length=32, required=False, allow_blank=True)
     driver_licence_number = serializers.CharField(max_length=64, required=False, allow_blank=True)
@@ -162,6 +175,17 @@ class VehicleUpdateSerializer(serializers.Serializer):
             raise serializers.ValidationError("Registration already exists.")
         return value
 
+    def validate_imei(self, value):
+        value = (value or "").strip()
+        if not value:
+            return None
+        queryset = Vehicle.objects.filter(imei=value)
+        if self.instance:
+            queryset = queryset.exclude(pk=self.instance.pk)
+        if queryset.exists():
+            raise serializers.ValidationError("IMEI already exists.")
+        return value
+
     def validate_driver_duty_status(self, value):
         if value and value not in DUTY_STATUSES:
             raise serializers.ValidationError("Unknown duty status.")
@@ -174,6 +198,8 @@ class VehicleUpdateSerializer(serializers.Serializer):
             instance.constituency = constituency
         if "registration" in validated_data:
             instance.registration = validated_data["registration"]
+        if "imei" in validated_data:
+            instance.imei = validated_data["imei"]
         for field in ("photo", "plate_photo", "led_photo", "chassis_photo"):
             if field in validated_data:
                 setattr(instance, field, validated_data[field])
@@ -238,3 +264,87 @@ class DocumentReviewSerializer(serializers.Serializer):
         if value not in (ApprovalStatus.APPROVED, ApprovalStatus.REJECTED):
             raise serializers.ValidationError("Decision must be approved or rejected.")
         return value
+
+
+class PlatformSettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PlatformSettings
+        fields = (
+            "daily_km_limit",
+            "long_halt_minutes",
+            "min_stop_minutes",
+            "stale_gps_minutes",
+            "expire_soon_days",
+            "expire_watch_days",
+            "approach_ratio",
+            "operating_start_hour",
+            "operating_end_hour",
+        )
+
+    def validate_daily_km_limit(self, value):
+        if value is None or value <= 0:
+            raise serializers.ValidationError("Daily km limit must be greater than 0.")
+        return value
+
+    def validate_long_halt_minutes(self, value):
+        if value < 1:
+            raise serializers.ValidationError("Long halt threshold must be at least 1 minute.")
+        return value
+
+    def validate_min_stop_minutes(self, value):
+        if value < 1:
+            raise serializers.ValidationError("Minimum stop duration must be at least 1 minute.")
+        return value
+
+    def validate_stale_gps_minutes(self, value):
+        if value < 1:
+            raise serializers.ValidationError("Stale GPS threshold must be at least 1 minute.")
+        return value
+
+    def validate_expire_soon_days(self, value):
+        if value < 1:
+            raise serializers.ValidationError("Expiring soon must be at least 1 day.")
+        return value
+
+    def validate_expire_watch_days(self, value):
+        if value < 1:
+            raise serializers.ValidationError("Expiring watch must be at least 1 day.")
+        return value
+
+    def validate_approach_ratio(self, value):
+        if value is None or value < 0 or value > 1:
+            raise serializers.ValidationError("Approach ratio must be between 0 and 1.")
+        return value
+
+    def validate_operating_start_hour(self, value):
+        if value < 0 or value > 23:
+            raise serializers.ValidationError("Start hour must be between 0 and 23.")
+        return value
+
+    def validate_operating_end_hour(self, value):
+        if value < 0 or value > 23:
+            raise serializers.ValidationError("End hour must be between 0 and 23.")
+        return value
+
+    def validate(self, attrs):
+        def current(name):
+            if name in attrs:
+                return attrs[name]
+            if self.instance is not None:
+                return getattr(self.instance, name)
+            return PLATFORM_DEFAULTS[name]
+
+        if current("long_halt_minutes") < current("min_stop_minutes"):
+            raise serializers.ValidationError(
+                {"long_halt_minutes": "Must be greater than or equal to the minimum stop duration."}
+            )
+        if current("expire_watch_days") <= current("expire_soon_days"):
+            raise serializers.ValidationError(
+                {"expire_watch_days": "Must be greater than expiring soon, used for the wider watch window."}
+            )
+        if current("operating_end_hour") <= current("operating_start_hour"):
+            raise serializers.ValidationError(
+                {"operating_end_hour": "End of the operating day must be after the start hour."}
+            )
+        return attrs
+

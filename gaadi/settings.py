@@ -147,6 +147,18 @@ DATABASES = {
     }
 }
 
+# Local Windows test runs without mysqlclient use SQLite in memory.
+if 'test' in sys.argv:
+    try:
+        import MySQLdb  # noqa: F401
+    except ImportError:
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.sqlite3',
+                'NAME': ':memory:',
+            }
+        }
+
 
 
 # Password validation
@@ -173,7 +185,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = os.getenv('TIME_ZONE', 'UTC')
 
 USE_I18N = True
 
@@ -329,3 +341,13 @@ LOGGING = {
         },
     },
 }
+
+# Track360 live GPS pull (https://pullapi-s1.track360.co.in/api/v1/auth/pull_api)
+TRACK360_PULL_URL = os.getenv(
+    "TRACK360_PULL_URL",
+    "https://pullapi-s1.track360.co.in/api/v1/auth/pull_api",
+)
+TRACK360_USERNAME = os.getenv("TRACK360_USERNAME", "")
+TRACK360_PASSWORD = os.getenv("TRACK360_PASSWORD", "")
+TRACK360_TIMEOUT_SECONDS = int(os.getenv("TRACK360_TIMEOUT_SECONDS", "15"))
+TRACK360_CACHE_SECONDS = int(os.getenv("TRACK360_CACHE_SECONDS", "20"))

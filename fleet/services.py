@@ -4,14 +4,13 @@ from accounts.constants import Level, Module, RoleCode
 from accounts.services import user_can
 from fleet.alerts import build_alerts
 from fleet.constants import (
-    DAILY_KM_LIMIT,
     DOCUMENT_LABELS,
     DOCUMENT_TYPES,
     FINANCE_DOCUMENT_TYPES,
-    DocumentValidity,
     VehicleStatus,
 )
 from fleet.models import VehicleDocument
+from fleet.platform import get_platform_settings
 from fleet.status import (
     constituency_status,
     document_validity,
@@ -48,12 +47,13 @@ def allowed_document_types(user):
     return set(DOCUMENT_TYPES)
 
 
-def compose_vehicle(vehicle, user=None, request=None, now=None):
+def compose_vehicle(vehicle, user=None, request=None, now=None, settings=None):
+    cfg = settings or get_platform_settings()
     telemetry = getattr(vehicle, "telemetry", None)
-    status = vehicle_status(telemetry, now)
+    status = vehicle_status(telemetry, now, settings=cfg)
     today_km = telemetry.today_km if telemetry else 0
-    attention = needs_attention(status, telemetry, now)
-    exceeded = is_exceeded(today_km)
+    attention = needs_attention(status, telemetry, now, settings=cfg)
+    exceeded = is_exceeded(today_km, settings=cfg)
     constituency = vehicle.constituency
     driver = vehicle.driver
     include_contact = show_driver_contact(user) if user is not None else True
@@ -61,6 +61,7 @@ def compose_vehicle(vehicle, user=None, request=None, now=None):
         "id": str(vehicle.id),
         "code": vehicle.code,
         "registration": vehicle.registration,
+        "imei": vehicle.imei or "",
         "photo": media_url(request, vehicle.photo),
         "plate_photo": media_url(request, vehicle.plate_photo),
         "led_photo": media_url(request, vehicle.led_photo),
@@ -101,12 +102,14 @@ def compose_vehicle(vehicle, user=None, request=None, now=None):
         "attention": attention,
         "exceeded": exceeded,
         "today_km": round(float(today_km), 1),
-        "daily_km_limit": DAILY_KM_LIMIT,
+        "daily_km_limit": cfg.daily_km_limit,
+        "long_halt_minutes": cfg.long_halt_minutes,
+        "stale_gps_minutes": cfg.stale_gps_minutes,
         "operating_min": telemetry.operating_min if telemetry else 0,
     }
 
 
-def compose_documents(vehicle, user=None, request=None, now=None):
+def compose_documents(vehicle, user=None, request=None, now=None, settings=None):
     allowed = allowed_document_types(user) if user is not None else set(DOCUMENT_TYPES)
     by_type = {item.doc_type: item for item in vehicle.documents.all()}
     rows = []
@@ -114,11 +117,11 @@ def compose_documents(vehicle, user=None, request=None, now=None):
         if doc_type not in allowed:
             continue
         document = by_type.get(doc_type)
-        rows.append(serialize_document(document, doc_type, request=request, now=now))
+        rows.append(serialize_document(document, doc_type, request=request, now=now, settings=settings))
     return rows
 
 
-def serialize_document(document, doc_type, request=None, now=None):
+def serialize_document(document, doc_type, request=None, now=None, settings=None):
     reviewer = None
     if document and document.reviewed_by_id:
         reviewer = document.reviewed_by.full_name or document.reviewed_by.email
@@ -133,13 +136,14 @@ def serialize_document(document, doc_type, request=None, now=None):
         "review_comment": document.review_comment if document else "",
         "reviewed_at": document.reviewed_at.isoformat() if document and document.reviewed_at else None,
         "reviewed_by": reviewer,
-        "validity": document_validity(document, now),
+        "validity": document_validity(document, now, settings=settings),
     }
 
 
-def compose_vehicle_detail(vehicle, user, request=None, now=None):
-    live = compose_vehicle(vehicle, user=user, request=request, now=now)
-    live["documents"] = compose_documents(vehicle, user=user, request=request, now=now)
+def compose_vehicle_detail(vehicle, user, request=None, now=None, settings=None):
+    cfg = settings or get_platform_settings()
+    live = compose_vehicle(vehicle, user=user, request=request, now=now, settings=cfg)
+    live["documents"] = compose_documents(vehicle, user=user, request=request, now=now, settings=cfg)
     live["alerts"] = build_alerts(vehicle, now)
     live["quick_actions"] = {
         "live_map": f"/live-map?vehicle={vehicle.id}",
@@ -150,12 +154,14 @@ def compose_vehicle_detail(vehicle, user, request=None, now=None):
     return live
 
 
-def vehicle_rows_for(vehicles, user=None, request=None, now=None):
-    return [compose_vehicle(vehicle, user=user, request=request, now=now) for vehicle in vehicles]
+def vehicle_rows_for(vehicles, user=None, request=None, now=None, settings=None):
+    cfg = settings or get_platform_settings()
+    return [compose_vehicle(vehicle, user=user, request=request, now=now, settings=cfg) for vehicle in vehicles]
 
 
-def rollup_constituency(constituency, vehicles, user=None, request=None, now=None):
-    rows = vehicle_rows_for(vehicles, user=user, request=request, now=now)
+def rollup_constituency(constituency, vehicles, user=None, request=None, now=None, settings=None):
+    cfg = settings or get_platform_settings()
+    rows = vehicle_rows_for(vehicles, user=user, request=request, now=now, settings=cfg)
     status = constituency_status(rows)
     return {
         "id": str(constituency.id),

@@ -77,7 +77,7 @@ Module: `constituencies`. List and detail need `view`. Create and edit need `edi
 | `GET` | `/constituencies/{uuid}/` | Rollup, vehicles, and today's derived alerts |
 | `PATCH` | `/constituencies/{uuid}/` | Edit fields or image |
 | `GET` | `/constituencies/{uuid}/vehicles/` | Vehicles in that constituency |
-| `GET` | `/constituencies/{uuid}/map/` | Current lat/lng and status for live-map handoff |
+| `GET` | `/constituencies/{uuid}/map/` | Current lat/lng and status for one constituency map |
 | `GET` | `/constituencies/{uuid}/alerts/` | Needs `alerts` view |
 | `GET` | `/constituencies/{uuid}/report/` | Needs `reports` view |
 
@@ -96,12 +96,12 @@ Module: `vehicles`. List and detail need `view`. Create and edit need `edit`.
 | Method | Path | Notes |
 |---|---|---|
 | `GET` | `/vehicles/` | `q` (code, registration, driver), `constituency`, `status` |
-| `POST` | `/vehicles/` | Constituency, registration, driver, optional photos |
+| `POST` | `/vehicles/` | Constituency, registration, optional `imei`, driver, optional photos |
 | `GET` | `/vehicles/{uuid}/` | Photos, driver, map point, today km vs 60, LED/GPS, documents, quick actions |
 | `PATCH` | `/vehicles/{uuid}/` | Assignment, photos, driver, telemetry snapshot |
 | `GET` | `/vehicles/{uuid}/alerts/` | Needs `alerts` view |
 
-Vehicle codes look like `GA-NG-AC01-V01`. Finance users do not receive driver phone or licence numbers. They also only see `insurance` and `advertisement_license` documents.
+Vehicle codes look like `GA-NG-AC01-V01`. Set `imei` so live map can overlay Track360 GPS. Finance users do not receive driver phone or licence numbers. They also only see `insurance` and `advertisement_license` documents.
 
 Quick actions on vehicle detail:
 
@@ -109,6 +109,14 @@ Quick actions on vehicle detail:
 - `history`: `/history?vehicle={id}`
 - `share`: `null` (client copies the page URL)
 - `notifications`: `/alerts?vehicle={id}`
+
+## 4.1 Live map
+
+Module: `live_map`. CSV export needs `export_data`. See [live-map.md](live-map.md).
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/live-map/` | Counts, map markers, and table. `q`, `constituency`, `status`, `date`, `vehicle`, `export=csv` |
 
 ## 5. Documents and expiry report
 
